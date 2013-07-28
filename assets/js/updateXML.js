@@ -39,13 +39,8 @@ if( atv.Element ) {
  */
 function log(msg)
 {
-    msg = msg.replace(/ /g, "%20")
-    msg = msg.replace(/</g, "&lt;")
-    msg = msg.replace(/>/g, "&gt;")
-    msg = msg.replace(/\//g, "&fs;")
-    msg = msg.replace(/"/g, "&qo;")
 		var req = new XMLHttpRequest();
-		var url = "http://trailers.apple.com/" + msg + "&atvlogger";
+		var url = "http://trailers.apple.com/" + "&PlexConnectLog=" + encodeURIComponent(msg);
 		req.open('GET', url, true);
 		req.send();
 };
@@ -63,9 +58,10 @@ function loadItem(event)
 		log(navbarID);
 		var item = document.getElementById(navbarID);
     var url = item.getElementByTagName('url').textContent;
-		if (url.indexOf("trailers.apple.com")!==-1)
+    if (url.indexOf("trailers.apple.com")!=-1)
     {
         url = url + "&PlexConnectUDID=" + atv.device.udid;
+        url = url + "&PlexConnectATVName=" + encodeURIComponent(atv.device.displayName);
     }
     loadMenuPages(url, event);
 };

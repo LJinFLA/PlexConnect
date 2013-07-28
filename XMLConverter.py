@@ -201,17 +201,23 @@ def XML_ReadFromURL(address, path):
 def discoverPMS():
     global g_param
     if g_param['CSettings'].getSetting('enable_plexgdm')=='False':
-        g_param['IP_PMS'] = g_param['CSettings'].getSetting('ip_pms')
-        g_param['Port_PMS'] = g_param['CSettings'].getSetting('port_pms')
-        g_param['Addr_PMS'] = g_param['IP_PMS']+':'+g_param['Port_PMS']
+        PMS_uuid = 'PMS_from_Settings'
+        g_param['PMS_list'] = { PMS_uuid:
+                {
+                    'uuid'      : PMS_uuid,
+                    'serverName': PMS_uuid,
+                    'ip'        : g_param['CSettings'].getSetting('ip_pms'),
+                    'port'      : g_param['CSettings'].getSetting('port_pms'),
+                }
+            }
         
+        g_param['Addr_PMS'] = g_param['PMS_list'][PMS_uuid]['ip'] +':'+ g_param['PMS_list'][PMS_uuid]['port']
         dprint(__name__, 0, "PlexGDM off - PMS from settings: {0}", g_param['Addr_PMS'])
         return True
     else:
-        if PlexGDM.Run()>0:
-            g_param['IP_PMS'] = PlexGDM.getIP_PMS()
-            g_param['Port_PMS'] = PlexGDM.getPort_PMS()
-            g_param['Addr_PMS'] = g_param['IP_PMS']+':'+g_param['Port_PMS']
+        g_param['PMS_list'] = PlexGDM.Run()
+        if len(g_param['PMS_list'])>0:
+            g_param['Addr_PMS'] = PlexGDM.getIP_PMS() +':'+ PlexGDM.getPort_PMS()
             
             dprint(__name__, 0, "PlexGDM - PMS: {0}", g_param['Addr_PMS'])
             return True
@@ -231,11 +237,6 @@ def XML_PMS2aTV(address, path, options):
     if not 'PlexConnectUDID' in options:
         dprint(__name__, 1, "no PlexConnectUDID - pick 007")
         options['PlexConnectUDID'] = '007'
-    
-    if g_param['Addr_PMS']=='':
-        # PlexGDM
-        if not discoverPMS():
-            return XML_Error('PlexConnect', 'No Plex Media Server in Proximity')
     
     dprint(__name__, 1, "PlexConnect Cmd: "+cmd)
     
@@ -305,9 +306,11 @@ def XML_PMS2aTV(address, path, options):
             
     elif cmd=='Settings':
         XMLtemplate = 'Settings.xml'
+        path = ''  # clear path - we don't need PMS-XML
     
     elif cmd=='SettingsVideoOSD':
         XMLtemplate = 'Settings_VideoOSD.xml'
+        path = ''  # clear path - we don't need PMS-XML
     
     elif cmd.startswith('SettingsToggle:'):
         opt = cmd[len('SettingsToggle:'):]  # cut command:
@@ -318,11 +321,22 @@ def XML_PMS2aTV(address, path, options):
         
         path = ''  # clear path - we don't need PMS-XML
     
+    elif cmd.startswith('Discover'):
+        discoverPMS()
+        
+        XMLtemplate = 'Settings.xml'
+        path = ''  # clear path - we don't need PMS-XML
+        
     elif path.startswith('/search?'):
         XMLtemplate = 'Search_Results.xml'
     
     # request PMS XML
     if not path=='':
+        if g_param['Addr_PMS']=='':
+            # PlexGDM
+            if not discoverPMS():
+                return XML_Error('PlexConnect', 'No Plex Media Server in Proximity')
+        
         PMS = XML_ReadFromURL(address, path)
         if PMS==False:
             return XML_Error('PlexConnect', 'No Response from Plex Media Server')
@@ -588,15 +602,17 @@ def PlexAPI_getTranscodePath(options, path):
     args['fastSeek'] = '1'
     args['path'] = path
     
-    xargs = PlexAPI_getXArgs()
+    xargs = PlexAPI_getXArgs(options)
     
     return transcodePath + urlencode(args) + '&' + urlencode(xargs)
 
-def PlexAPI_getXArgs():
+def PlexAPI_getXArgs(options=None):
     xargs = dict()
     xargs['X-Plex-Device'] = 'AppleTV'
     xargs['X-Plex-Model'] = '3,1' # Base it on AppleTV model.
-    xargs['X-Plex-Device-Name'] = 'MyAppleTV' # "friendly" name. Base on UDID? Add UDID?
+    if not options is None:
+        if 'PlexConnectATVName' in options:
+            xargs['X-Plex-Device-Name'] = options['PlexConnectATVName'] # "friendly" name: aTV-Settings->General->Name.
     xargs['X-Plex-Platform'] = 'iOS'
     xargs['X-Plex-Client-Platform'] = 'iOS'
     xargs['X-Plex-Platform-Version'] = '5.3' # Base it on AppleTV OS version.
@@ -976,11 +992,10 @@ class CCommandCollection(CCommandHelper):
         ratingKey, leftover, dfltd = self.getKey(src, srcXML, param)  # getKey "defaults" if nothing found.
         duration, leftover, dfltd = self.getKey(src, srcXML, leftover)
         UDID = self.options['PlexConnectUDID']
-        out = "atv.sessionStorage['ratingKey']='" + ratingKey + "';atv.sessionStorage['duration']='" + duration + \
-              "';atv.sessionStorage['showplayerclock']='" + g_ATVSettings.getSetting(UDID, 'showplayerclock') + \
-              "';atv.sessionStorage['showendtime']='" + g_ATVSettings.getSetting(UDID, 'showendtime') + \
-              "';atv.sessionStorage['timeformat']='" + g_ATVSettings.getSetting(UDID, 'timeformat') +  \
-              "';atv.sessionStorage['atvname']='" + "MyAppleTV" + "'"
+        out = "atv.sessionStorage['ratingKey']='" + ratingKey + "';atv.sessionStorage['duration']='" + duration + "';" + \
+              "atv.sessionStorage['showplayerclock']='" + g_ATVSettings.getSetting(UDID, 'showplayerclock') + "';" + \
+              "atv.sessionStorage['showendtime']='" + g_ATVSettings.getSetting(UDID, 'showendtime') + "';" + \
+              "atv.sessionStorage['timeformat']='" + g_ATVSettings.getSetting(UDID, 'timeformat') + "';"
         return out 
     
     def ATTRIB_getPath(self, src, srcXML, param):
@@ -1009,6 +1024,9 @@ class CCommandCollection(CCommandHelper):
         unwatched = int(total) - int(viewed)
         if unwatched > 0: return str(unwatched) + " unwatched"
         else: return ""
+    
+    def ATTRIB_PMSCOUNT(self, src, srcXML, param):
+        return str(len(g_param['PMS_list']))
 
 
 

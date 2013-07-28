@@ -33,14 +33,8 @@ if( atv.Element ) {
  */
 function log(msg)
 {
-    msg = msg.replace(/ /g, "%20")
-    msg = msg.replace(/</g, "&lt;")
-    msg = msg.replace(/>/g, "&gt;")
-    msg = msg.replace(/\//g, "&fs;")
-    msg = msg.replace(/"/g, "&qo;")
-    
     var req = new XMLHttpRequest();
-    var url = "http://trailers.apple.com/" + msg + "&atvlogger";
+    var url = "http://trailers.apple.com/" + "&PlexConnectLog=" + encodeURIComponent(msg);
     req.open('GET', url, true);
     req.send();
 };
@@ -93,9 +87,10 @@ var iOS_atv_loadURL = atv.loadURL;
 atv.loadURL = function(url)
 {
     log("loadURL (override): "+url);
-    if (url.indexOf("trailers.apple.com")!==-1)
+    if (url.indexOf("trailers.apple.com")!=-1)
     {
         url = url + "&PlexConnectUDID=" + atv.device.udid;
+        url = url + "&PlexConnectATVName=" + encodeURIComponent(atv.device.displayName);
     }
     
     iOS_atv_loadURL(url);
@@ -111,9 +106,10 @@ var iOS_atv_loadAndSwapURL = atv.loadAndSwapURL;
 atv.loadAndSwapURL = function(url)
 {
     log("loadAndSwapURL (override): "+url);
-    if (url.indexOf("trailers.apple.com")!==-1)
+    if (url.indexOf("trailers.apple.com")!=-1)
     {
         url = url + "&PlexConnectUDID=" + atv.device.udid;
+        url = url + "&PlexConnectATVName=" + encodeURIComponent(atv.device.displayName);
     }
     
     iOS_atv_loadAndSwapURL(url);
